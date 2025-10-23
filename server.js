@@ -11,11 +11,16 @@ import authRoutes from "./routes/auth.js";
 import prefRoutes from "./routes/preferences.js";
 
 dotenv.config(); // lee .env de la raíz
-
+const isProd = process.env.NODE_ENV === "production";
 const app = express();
-const PORT = process.env.PORT || 3000;
-
-// ----------------------------------------------------
+const PORT =
+  isProd
+    ? Number(process.env.PORT)            // Plesk lo define
+    : Number(process.env.PORT || 3000);   // dev local
+if (isProd && !PORT) {
+  console.error("[BOOT] Missing PORT from environment in production");
+  process.exit(1);
+}
 // Utilidades de ruta
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -152,6 +157,6 @@ app.use((err, _req, res, _next) => {
 });
 
 // ----------------------------------------------------
-app.listen(PORT, () => {
-  console.log(`API running on port ${PORT}`);
+app.listen(PORT, "127.0.0.1", () => {
+  console.log(`API running on port ${PORT} (${isProd ? "prod" : "dev"})`);
 });
