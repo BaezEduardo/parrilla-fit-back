@@ -1,0 +1,67 @@
+# === Entorno / credenciales (¡no subir!) ===
+.env
+.env.*
+!.env.example
+
+# === Node ===
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# === Builds / artefactos ===
+dist/
+build/
+*.cache
+.cache/
+.tmp/
+.temp/
+
+# === Vite / bundlers ===
+.vite/
+vite.config.ts.timestamp-*
+vite.config.js.timestamp-*
+
+# === Tests / cobertura ===
+coverage/
+.nyc_output/
+
+# === Herramientas ===
+.eslintcache
+.stylelintcache
+.turbo/
+.parcel-cache/
+*.tsbuildinfo
+
+# === Sistemas Operativos ===
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# === Editores ===
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# === Logs genéricos ===
+*.log
+logs/
+*.pid
+*.seed
+*.pid.lock
+
+# === Archivos temporales comunes ===
+*.orig
+*.rej
+
+# === Producción en hosts (si los usas) ===
+.vercel/
+.netlify/

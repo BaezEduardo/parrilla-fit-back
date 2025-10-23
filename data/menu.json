@@ -1,0 +1,108 @@
+{
+  "hero": {
+    "title": "La Parrilla Fit",
+    "subtitle": "Experimenta la excelencia culinaria con nuestro menú cuidadosamente elaborado"
+  },
+  "sections": [
+    {
+      "name": "Entradas",
+      "items": [
+        {
+          "title": "Arancini de Trufa",
+          "desc": "Bolitas crujientes de risotto rellenas de hongos silvestres y aceite de trufa, servidas con salsa cremosa de parmesano",
+          "price": "320"
+        },
+        {
+          "title": "Vieiras Selladas",
+          "desc": "Vieiras selladas a la sartén con puré de coliflor, crujientes de pancetta y microvegetales",
+          "price": "430"
+        },
+        {
+          "title": "Bruschetta Mediterránea",
+          "desc": "Pan artesanal con tomates cherry, albahaca fresca, aceite de oliva virgen extra y queso feta",
+          "price": "280"
+        },
+        {
+          "title": "Ceviche de Camarón",
+          "desc": "Camarones marinados en jugo de limón con cebolla morada, pepino, mango y toques de chile habanero",
+          "price": "350" 
+        }
+      ]
+    },
+    {
+      "name": "Platos Principales",
+      "items": [
+        {
+          "title": "Lomo de Res Wagyu",
+          "desc": "8oz de corte premium con tuétano asado, vegetales de temporada y reducción de vino tinto",
+          "price": "1180"
+        },
+        {
+          "title": "Salmón a la Parrilla",
+          "desc": "Salmón del Atlántico con costra de hierbas y limón, quinoa pilaf y espárragos a la parrilla",
+          "price": "590"
+        },
+        {
+          "title": "Pechuga de Pollo Orgánica",
+          "desc": "Pechuga de pollo marinada con limón y romero, servida con puré de camote y espinacas salteadas",
+          "price": "460"
+        },
+        {
+          "title": "Filete de Cerdo en Salsa de Mostaza",
+          "desc": "Filete de cerdo tierno con salsa de mostaza Dijon, acompañado de papas rostizadas y vegetales al vapor",
+          "price": "480"
+        }
+      ]
+    },
+    {
+      "name": "Postres",
+      "items": [
+        {
+          "title": "Pastel de Lava de Chocolate",
+          "desc": "Pastel de chocolate tibio con centro fundido, helado de vainilla y compota de frutos rojos",
+          "price": "250"
+        },
+        {
+          "title": "Crème Brûlée",
+          "desc": "Clásica crema de vainilla con costra de azúcar caramelizada y frutos rojos frescos",
+          "price": "230"
+        },
+        {
+          "title": "Cheesecake de Maracuyá",
+          "desc": "Pastel cremoso de queso con glaseado de maracuyá y base de galleta artesanal",
+          "price": "240"
+        },
+        {
+          "title": "Brownie Proteico",
+          "desc": "Brownie sin harina con cacao orgánico y proteína de almendra, acompañado de helado de coco",
+          "price": "220"
+        }
+      ]
+    },
+    {
+      "name": "Bebidas",
+      "items": [
+        {
+          "title": "Selección de Vinos de la Casa",
+          "desc": "Tinto, blanco o rosado - pregunta a tu mesero por las selecciones del día",
+          "price": "250-380"
+        },
+        {
+          "title": "Cócteles Artesanales",
+          "desc": "Old Fashioned, Manhattan, Negroni o cócteles especiales de temporada",
+          "price": "280-350"
+        },
+        {
+          "title": "Limonada de Hierbabuena",
+          "desc": "Limonada natural con infusión de hierbabuena fresca y toque de miel orgánica",
+          "price": "140"
+        },
+        {
+          "title": "Smoothie Tropical",
+          "desc": "Mezcla energizante de piña, plátano, mango y proteína vegetal",
+          "price": "160"
+        }
+      ]
+    }
+  ]
+}
