@@ -1,4 +1,4 @@
-// server.js
+// server.js (minimal para Passenger)
 import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
@@ -6,29 +6,19 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
 import { getBase } from "./airtable.js";
-// Rutas propias
 import authRoutes from "./routes/auth.js";
 import prefRoutes from "./routes/preferences.js";
 
-dotenv.config(); // lee .env de la raíz
-console.log("[BOOT] NODE_ENV=", process.env.NODE_ENV, "PORT=", process.env.PORT);
-const isProd = process.env.NODE_ENV === "production";
-const app = express();
-const PORT =
-  isProd
-    ? Number(process.env.PORT)            // Plesk lo define
-    : Number(process.env.PORT || 3000);   // dev local
+dotenv.config();
 
-if (isProd && !PORT) {
-  console.error("[BOOT] Missing PORT in production env");
-  process.exit(1);
-}
-// Utilidades de ruta
+const app = express();
+const isProd = process.env.NODE_ENV === "production";
+const PORT = isProd ? Number(process.env.PORT || 0) : Number(process.env.PORT || 3000);
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// ----------------------------------------------------
-// CORS (poner antes de las rutas)
+// CORS muy simple (puedes ajustar luego)
 const allowed = (process.env.CORS_ORIGIN || "")
   .split(",")
   .map((s) => s.trim())
@@ -44,11 +34,14 @@ app.use(
   })
 );
 
-// Body parser
 app.use(express.json());
+app.use("/api/auth", authRoutes);
+app.use("/api/preferences", prefRoutes);
+app.get("/", (_req, res) => res.send("API Parrilla Fit funcionando ✅"));
+// evita 500 del favicon
+app.get("/favicon.ico", (_req,res) => res.status(204).end());
 
-// ----------------------------------------------------
-// Health & verificación
+// salud
 app.get("/health", (_req, res) => res.send("ok"));
 app.get("/__ver", (_req, res) => {
   res.json({
@@ -59,13 +52,42 @@ app.get("/__ver", (_req, res) => {
   });
 });
 
+// muestra menú desde archivo
+app.get("/api/menu", (_req, res) => {
+  try {
+    const filePath = path.join(__dirname, "data", "menu.json");
+    const text = fs.readFileSync(filePath, "utf-8");
+    res.json(JSON.parse(text));
+  } catch (e) {
+    console.error("[/api/menu] error:", e);
+    res.status(500).json({ error: "No se pudo leer el menú" });
+  }
+});
+
+app.get("/data", async (_req, res) => {
+  try {
+    const b = typeof getBase === "function" ? getBase() : base;
+    if (!b) return res.status(503).json({ error: "Airtable no inicializado" });
+
+    const tableName = process.env.AIRTABLE_TABLE_USERS || "Users";
+    const recs = await b(tableName).select({}).all();
+    res.json(recs.map(r => r.fields));
+  } catch (err) {
+    console.error("[/data] Airtable error:", err);
+    if (process.env.NODE_ENV !== "production") {
+      return res.status(500).json({ error: err?.message || String(err) });
+    }
+    res.status(500).json({ error: "Error consultando Airtable" });
+  }
+});
+
 app.get("/__air", async (_req, res) => {
   try {
     // usa getBase() si tu inicialización está en airtable.js
     const b = typeof getBase === "function" ? getBase() : base;
     if (!b) throw new Error("Airtable no inicializado (revisa AIRTABLE_API_KEY y AIRTABLE_BASE_ID)");
 
-    const tableName = process.env.AIRTABLE_TABLE_USERS || "Clientes"; // ajusta si tu tabla se llama distinto
+    const tableName = process.env.AIRTABLE_TABLE_USERS || "Users"; // ajusta si tu tabla se llama distinto
     const records = await b(tableName).select({ maxRecords: 3 /*, view: "Grid view"*/ }).firstPage();
 
     res.json({
@@ -84,60 +106,6 @@ app.get("/__air", async (_req, res) => {
   }
 });
 
-// ----------------------------------------------------
-// Airtable (init seguro para que no crashee si faltan envs)
-let base = null;
-try {
-  const key = process.env.AIRTABLE_API_KEY || process.env.AIRTABLE_TOKEN;
-  const baseId = process.env.AIRTABLE_BASE_ID;
-  if (!key || !baseId) {
-    console.warn("[Airtable] Faltan AIRTABLE_API_KEY/TOKEN o AIRTABLE_BASE_ID");
-  } else {
-    const { default: Airtable } = await import("airtable");
-    base = new Airtable({ apiKey: key }).base(baseId);
-    console.log("[Airtable] OK");
-  }
-} catch (e) {
-  console.error("[Airtable] init error:", e?.message || e);
-}
-
-// ----------------------------------------------------
-// Rutas API
-app.use("/api/auth", authRoutes);
-app.use("/api/preferences", prefRoutes);
-
-app.get("/", (_req, res) => res.send("API Parrilla Fit funcionando ✅"));
-
-app.get("/api/menu", (_req, res) => {
-  try {
-    const filePath = path.join(__dirname, "data", "menu.json");
-    const text = fs.readFileSync(filePath, "utf-8");
-    const data = JSON.parse(text); // valida que sea JSON válido
-    res.json(data);
-  } catch (err) {
-    console.error("[/api/menu] Error:", err?.message || err);
-    res.status(500).json({ error: "No se pudo leer el menú" });
-  }
-});
-
-app.get("/data", async (_req, res) => {
-  try {
-    const b = typeof getBase === "function" ? getBase() : base;
-    if (!b) return res.status(503).json({ error: "Airtable no inicializado" });
-
-    const tableName = process.env.AIRTABLE_TABLE_USERS || "Clientes";
-    const recs = await b(tableName).select({}).all();
-    res.json(recs.map(r => r.fields));
-  } catch (err) {
-    console.error("[/data] Airtable error:", err);
-    if (process.env.NODE_ENV !== "production") {
-      return res.status(500).json({ error: err?.message || String(err) });
-    }
-    res.status(500).json({ error: "Error consultando Airtable" });
-  }
-});
-
-
 app.post("/api/chat", (req, res) => {
   const { message } = req.body || {};
   if (!message) {
@@ -151,14 +119,11 @@ app.post("/api/chat", (req, res) => {
   });
 });
 
-// ----------------------------------------------------
-// Manejador global de errores (último middleware)
 app.use((err, _req, res, _next) => {
   console.error("[Unhandled]", err?.stack || err);
   res.status(500).json({ error: "Internal error" });
 });
 
-// ----------------------------------------------------
 app.listen(PORT, () => {
   console.log(`API running on port ${PORT} (${isProd ? "prod" : "dev"})`);
 });
