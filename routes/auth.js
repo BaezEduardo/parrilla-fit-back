@@ -3,6 +3,7 @@ import bcrypt from "bcrypt";
 import { createUser, findUserByPhone } from "../airtable.js";
 import { findUserById } from "../airtable.js";
 import { updatePasswordHash } from "../airtable.js";
+import { deleteUser } from "../airtable.js";
 
 const r = Router();
 
@@ -71,6 +72,35 @@ r.put("/password", async (req, res) => {
   } catch (e) {
     console.error("[password]", e);
     res.status(500).json({ error: "No se pudo actualizar la contraseña" });
+  }
+});
+
+// DELETE /api/auth/:recordId   { currentPassword }
+r.delete("/:recordId", async (req, res) => {
+  try {
+    const { recordId } = req.params;
+    const { currentPassword } = req.body || {};
+
+    if (!recordId || !currentPassword) {
+      return res.status(400).json({ error: "Datos incompletos" });
+    }
+
+    // 1) Obtener usuario
+    const rec = await findUserById(recordId);
+    if (!rec) return res.status(404).json({ error: "Usuario no encontrado" });
+
+    // 2) Verificar contraseña
+    const ok = await bcrypt.compare(currentPassword, rec.get("PasswordHash"));
+    if (!ok) return res.status(401).json({ error: "Contraseña actual incorrecta" });
+
+    // 3) Eliminar
+    await deleteUser(recordId);
+
+    // 4) Responder
+    return res.json({ ok: true, message: "Cuenta eliminada" });
+  } catch (e) {
+    console.error("[auth:deleteAccount]", e);
+    res.status(500).json({ error: "No se pudo eliminar la cuenta" });
   }
 });
 

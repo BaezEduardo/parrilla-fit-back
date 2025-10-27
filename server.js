@@ -9,6 +9,7 @@ import { getBase } from "./airtable.js";
 import authRoutes from "./routes/auth.js";
 import prefRoutes from "./routes/preferences.js";
 import dishesRoutes from "./routes/dishes.js";
+import adminUsersRoutes from "./routes/users.admin.js";
 
 dotenv.config();
 
@@ -39,6 +40,8 @@ app.use(express.json());
 app.use("/api/auth", authRoutes);
 app.use("/api/preferences", prefRoutes);
 app.use("/api/dishes", dishesRoutes);
+app.use("/api/users", adminUsersRoutes);
+
 app.get("/", (_req, res) => res.send("API Parrilla Fit funcionando ✅"));
 // evita 500 del favicon
 app.get("/favicon.ico", (_req,res) => res.status(204).end());

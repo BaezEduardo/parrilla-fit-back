@@ -93,6 +93,56 @@ export function userRecordToJSON(rec) {
   };
 }
 
+export async function deleteUser(recordId) {
+  const table = usersTable();
+  if (!table) throw new Error("Airtable no inicializado");
+  await table.destroy([recordId]); // hard-delete
+  return true;
+}
+
+// === NUEVO: listar usuarios con filtros básicos ===
+export async function listUsers({ role, q, limit = 50 } = {}) {
+  const table = usersTable();
+  if (!table) throw new Error("Airtable no inicializado");
+
+  const parts = [];
+  if (role) parts.push(`{Role} = '${role}'`);
+  if (q) {
+    const safe = String(q).replace(/'/g, "\\'");
+    parts.push(
+      `OR(` +
+        `FIND(LOWER('${safe}'), LOWER({Name}))>0,` +
+        `FIND(LOWER('${safe}'), LOWER({Phone}))>0` +
+      `)`
+    );
+  }
+  const filterByFormula = parts.length ? `AND(${parts.join(",")})` : undefined;
+
+  const records = await table
+    .select({
+      filterByFormula,
+      pageSize: Math.min(Number(limit) || 50, 100),
+    })
+    .all();
+
+  return records;
+}
+
+// === NUEVO: mapeo "público" de usuario (sin PasswordHash) ===
+export function userAdminViewJSON(rec) {
+  if (!rec) return null;
+  return {
+    id: rec.id,
+    Name: rec.get("Name") || "",
+    Phone: rec.get("Phone") || "",
+    Role: rec.get("Role") || "user",
+    Likes: rec.get("Likes") || [],
+    Dislikes: rec.get("Dislikes") || [],
+    Allergies: rec.get("Allergies") || [],
+    // Jamás exponemos PasswordHash
+  };
+}
+
 /* ===========================
  * Platillos
  * =========================== */
