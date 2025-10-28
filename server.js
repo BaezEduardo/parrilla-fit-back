@@ -1,83 +1,110 @@
+// server.js
 import express from "express";
-import dotenv from "dotenv";
-import cors from "cors";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import path from "path";
 import cookieParser from "cookie-parser";
-import { getBase } from "./airtable.js";
-import authRoutes from "./routes/auth.js";
-import prefRoutes from "./routes/preferences.js";
-import dishesRoutes from "./routes/dishes.js";
-import adminUsersRoutes from "./routes/users.admin.js";
+import morgan from "morgan";
+import cors from "cors";
+import { fileURLToPath } from "url";
 
-dotenv.config();
+import { ENV } from "./config/env.js";
+import authRouter from "./routes/auth.js";
+import usersRouter from "./routes/users.js";
+import dishesRouter from "./routes/dishes.js";
+import { requireAuth } from "./middlewares/authz.js";
+import { notFound, errorHandler } from "./middlewares/error.js";
 
 const app = express();
-const isProd = process.env.NODE_ENV === "production";
-const PORT = Number(process.env.PORT || 3000);
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-app.set("trust proxy", 1);
+const isProd = ENV.NODE_ENV === "production";
 
-const allowed = (process.env.CORS_ORIGIN || "")
-  .split(",")
-  .map(s => s.trim())
-  .filter(Boolean);
+// --- Middlewares base
+app.use(morgan(isProd ? "combined" : "dev"));
+app.use(express.json());
+app.use(cookieParser());
 
+// --- CORS (dev permite localhost:5173; prod puedes fijar tu dominio)
+const corsOrigin = process.env.CORS_ORIGIN || "http://localhost:5173";
 app.use(
   cors({
-    origin: (origin, cb) => {
-      if (!origin || allowed.includes(origin)) return cb(null, true);
-      return cb(new Error("Origen no permitido por CORS"), false);
-    },
+    origin: isProd ? corsOrigin : corsOrigin,
     credentials: true,
   })
 );
 
-app.use(cookieParser());
-app.use(express.json());
+// --- Utilidad: opciones de cookie según entorno
+function cookieOpts() {
+  const weekMs = 1000 * 60 * 60 * 24 * 7;
+  return {
+    httpOnly: true,
+    secure: isProd,            // requiere HTTPS en prod
+    sameSite: isProd ? "none" : "lax",
+    path: "/",
+    maxAge: weekMs,            // alinea con JWT_EXPIRES ~7d
+  };
+}
 
-// Rutas API
-app.use("/api/auth", authRoutes);
-app.use("/api/preferences", prefRoutes);
-app.use("/api/dishes", dishesRoutes);
-app.use("/api/users", adminUsersRoutes);
+// --- “Login cookie wiring”
+// Interceptamos res.json para poner cookie si el body tiene { token, user }
+app.use((req, res, next) => {
+  const originalJson = res.json.bind(res);
+  res.json = (body) => {
+    try {
+      if (
+        req.path === "/api/auth/login" &&
+        req.method === "POST" &&
+        body &&
+        typeof body === "object" &&
+        body.token
+      ) {
+        res.cookie("token", body.token, cookieOpts());
+      }
+    } catch {
+      // no romper respuesta si algo falla al setear cookie
+    }
+    return originalJson(body);
+  };
+  next();
+});
 
-// Diagnóstico
-app.get("/", (_req, res) => res.send("API Parrilla Fit funcionando ✅"));
-app.get("/health", (_req, res) => res.send("ok"));
-app.get("/__ver", (_req, res) => {
-  res.json({
-    msg: "backend vivo",
-    cwd: process.cwd(),
-    time: new Date().toISOString(),
-    allowedOrigins: allowed,
+// --- API routes
+app.use("/api/auth", authRouter);
+app.use("/api/users", usersRouter);
+app.use("/api/dishes", dishesRouter);
+
+// --- Endpoints de sesión basados en cookie (sobrescriben los placeholders del router)
+app.get("/api/auth/me", requireAuth, (req, res) => {
+  // req.user viene del JWT (middlewares/authz.js)
+  const { id, role, name, phone } = req.user || {};
+  res.json({ id, role, name, phone });
+});
+
+app.post("/api/auth/logout", (req, res) => {
+  res.clearCookie("token", { ...cookieOpts(), maxAge: 0 });
+  res.status(204).end();
+});
+
+// --- Static (producción): sirve tu frontend si existe
+// Ajusta STATIC_DIR si tu build vive en otro sitio (por ejemplo, "../client/dist")
+const STATIC_DIR = process.env.STATIC_DIR || path.join(__dirname, "public");
+if (isProd) {
+  app.use(express.static(STATIC_DIR));
+  // Para apps SPA: redirige todo lo no-API a index.html
+  app.get("*", (req, res, next) => {
+    if (req.path.startsWith("/api/")) return next();
+    res.sendFile(path.join(STATIC_DIR, "index.html"));
   });
-});
-app.get("/__air", async (_req, res) => {
-  try {
-    const b = typeof getBase === "function" ? getBase() : null;
-    if (!b) throw new Error("Airtable no inicializado");
-    const table = process.env.AIRTABLE_TABLE_USERS || "Users";
-    const records = await b(table).select({ maxRecords: 3 }).firstPage();
-    res.json({
-      ok: true,
-      table,
-      count: records.length,
-      sample: records.map(r => ({ id: r.id, fields: r.fields })),
-    });
-  } catch (e) {
-    res.status(500).json({ ok: false, message: e?.message || String(e) });
-  }
-});
+}
 
-app.use((err, _req, res, _next) => {
-  console.error("[Unhandled]", err?.stack || err);
-  res.status(500).json({ error: "Internal error" });
-});
+app.get("/api/health", (_req, res) => res.json({ ok: true, env: ENV.NODE_ENV }));
 
-app.listen(PORT, () => {
-  console.log(`✅ API running on port ${PORT} (${isProd ? "prod" : "dev"})`);
+// --- 404 y manejador de errores
+app.use(notFound);
+app.use(errorHandler);
+
+// --- Inicio
+const port = ENV.PORT || 3000;
+app.listen(port, () => {
+  console.log(`[server] ${isProd ? "PROD" : "DEV"} listening on :${port}`);
 });
