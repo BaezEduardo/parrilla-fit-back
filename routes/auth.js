@@ -1,19 +1,44 @@
 import { Router } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import { createUser, findUserByPhone, findUserById, updatePasswordHash, deleteUser, normalizeRole } from "../airtable.js";
+import {
+  createUser,
+  findUserByPhone,
+  findUserById,
+  updatePasswordHash,
+  deleteUser,
+  normalizeRole
+} from "../airtable.js";
 import { requireAuth } from "./authz.js";
 
 const r = Router();
+
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
-const isProd = process.env.NODE_ENV === "production";
+const isProd    = process.env.NODE_ENV === "production";
+const COOKIE_NAME = "pf_auth";
+
+// Helper centralizado para setear la cookie de sesión
+function setAuthCookie(res, token) {
+  res.cookie(COOKIE_NAME, token, {
+    httpOnly: true,
+    sameSite: "lax",        // MISMO ORIGEN con proxy /api
+    secure: isProd,         // true en producción (HTTPS)
+    path: "/",              // toda la app
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
+    // ⚠️ NO establecer "domain" para que se ate al dominio actual
+  });
+}
 
 // Registro
 r.post("/register", async (req, res) => {
   try {
     let { name, phone, password } = req.body || {};
-    if (!name || !phone || !password) return res.status(400).json({ error: "Campos incompletos" });
-    phone = phone.replace(/\D+/g, "");
+    if (!name || !phone || !password) {
+      return res.status(400).json({ error: "Campos incompletos" });
+    }
+
+    phone = String(phone).replace(/\D+/g, "");
+
     const exists = await findUserByPhone(phone);
     if (exists) return res.status(409).json({ error: "Teléfono ya registrado" });
 
@@ -22,13 +47,7 @@ r.post("/register", async (req, res) => {
     const role = normalizeRole(rec.get("Role"));
 
     const token = jwt.sign({ sub: rec.id, role }, JWT_SECRET, { expiresIn: "7d" });
-    res.cookie("pf_auth", token, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: isProd,
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      path: "/",
-    });
+    setAuthCookie(res, token);
 
     res.json({ id: rec.id, name, phone, role });
   } catch (e) {
@@ -41,22 +60,17 @@ r.post("/register", async (req, res) => {
 r.post("/login", async (req, res) => {
   try {
     let { phone, password } = req.body || {};
-    phone = (phone || "").replace(/\D+/g, "");
+    phone = String(phone || "").replace(/\D+/g, "");
 
     const rec = await findUserByPhone(phone);
     if (!rec) return res.status(401).json({ error: "Credenciales inválidas" });
+
     const ok = await bcrypt.compare(password, rec.get("PasswordHash"));
     if (!ok) return res.status(401).json({ error: "Credenciales inválidas" });
 
     const role = normalizeRole(rec.get("Role"));
     const token = jwt.sign({ sub: rec.id, role }, JWT_SECRET, { expiresIn: "7d" });
-    res.cookie("pf_auth", token, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: isProd,
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      path: "/",
-    });
+    setAuthCookie(res, token);
 
     res.json({
       id: rec.id,
@@ -75,7 +89,12 @@ r.post("/login", async (req, res) => {
 
 // Logout
 r.post("/logout", (_req, res) => {
-  res.clearCookie("pf_auth", { sameSite: "lax", secure: isProd, path: "/" });
+  res.clearCookie(COOKIE_NAME, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: isProd,
+    path: "/",
+  });
   res.json({ ok: true });
 });
 
@@ -85,6 +104,7 @@ r.put("/password", requireAuth, async (req, res) => {
     const { currentPassword, newPassword } = req.body || {};
     if (!currentPassword || !newPassword)
       return res.status(400).json({ error: "Datos incompletos" });
+
     const rec = await findUserById(req.user.id);
     if (!rec) return res.status(404).json({ error: "Usuario no encontrado" });
 
@@ -113,7 +133,14 @@ r.delete("/me", requireAuth, async (req, res) => {
     if (!ok) return res.status(401).json({ error: "Contraseña incorrecta" });
 
     await deleteUser(req.user.id);
-    res.clearCookie("pf_auth", { sameSite: "lax", secure: isProd, path: "/" });
+
+    res.clearCookie(COOKIE_NAME, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: isProd,
+      path: "/",
+    });
+
     res.status(204).end();
   } catch (e) {
     console.error(e);
@@ -126,6 +153,7 @@ r.get("/me", requireAuth, async (req, res) => {
   try {
     const rec = await findUserById(req.user.id);
     if (!rec) return res.status(404).json({ error: "Usuario no encontrado" });
+
     res.json({
       id: rec.id,
       name: rec.get("Name"),
@@ -136,6 +164,7 @@ r.get("/me", requireAuth, async (req, res) => {
       allergies: rec.get("Allergies") || [],
     });
   } catch (e) {
+    console.error(e);
     res.status(500).json({ error: "No se pudo obtener el usuario" });
   }
 });
