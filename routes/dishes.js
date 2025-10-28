@@ -3,6 +3,7 @@ import { Router } from "express";
 import {
   listDishes, getDishById, createDish, updateDish, deleteDish
 } from "../airtable.js";
+import { requireAdmin } from "./authz.js";
 
 const r = Router();
 
@@ -14,15 +15,6 @@ const DISH_CATEGORIES = [
 const DISH_TAGS = [
   "Light", "Sin gluten", "Sin lactosa", "Picante", "Vegetariano",
 ];
-
-// Guard mínimamente seguro para admin (hasta meter JWT)
-function requireAdmin(req, res, next) {
-  const key = req.get("x-admin-key");
-  if (!key || key !== process.env.ADMIN_API_KEY) {
-    return res.status(401).json({ error: "Admin key inválida" });
-  }
-  next();
-}
 
 function validateDishInput(payload, partial = false) {
   const out = {};
@@ -99,12 +91,15 @@ r.get("/:id", async (req, res) => {
     if (!rec) return res.status(404).json({ error: "No encontrado" });
     res.json(mapDishRecord(rec));
   } catch (e) {
+    if (e?.statusCode === 404) {
+      return res.status(404).json({ error: "No encontrado" });
+    }
     console.error("[dishes:get]", e);
-    res.status(404).json({ error: "No encontrado" });
+    res.status(500).json({ error: "Error obteniendo platillo" });
   }
 });
 
-// --- Admin ---
+// --- Admin (JWT) ---
 r.post("/", requireAdmin, async (req, res) => {
   try {
     const fields = validateDishInput(req.body, false);
@@ -128,7 +123,7 @@ r.patch("/:id", requireAdmin, async (req, res) => {
 r.delete("/:id", requireAdmin, async (req, res) => {
   try {
     await deleteDish(req.params.id);
-    res.json({ ok: true });
+    res.status(204).end();
   } catch (e) {
     console.error("[dishes:delete]", e);
     res.status(500).json({ error: "No se pudo eliminar" });

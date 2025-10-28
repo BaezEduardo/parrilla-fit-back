@@ -1,61 +1,38 @@
 // routes/users.admin.js
 import { Router } from "express";
-import { listUsers, deleteUser, findUserById, userAdminViewJSON } from "../airtable.js";
+import { requireAdmin } from "./authz.js";
+import { listUsers, deleteUser, userAdminViewJSON } from "../airtable.js";
 
 const r = Router();
 
-// Guard simple con x-admin-key (igual que en dishes)
-function requireAdmin(req, res, next) {
-  const key = req.get("x-admin-key");
-  if (!key || key !== process.env.ADMIN_API_KEY) {
-    return res.status(401).json({ error: "Admin key inválida" });
-  }
-  next();
-}
+// ✅ todas las rutas de este router requieren admin
+r.use(requireAdmin);
 
-/**
- * GET /api/users  (admin)
- * Query params opcionales:
- *  - role: "user" | "admin"
- *  - q: texto (busca en Name/Phone)
- *  - limit: número (por defecto 50, máx 100)
- */
-r.get("/", requireAdmin, async (req, res) => {
+r.get("/", async (req, res) => {
   try {
-    const { role, q, limit } = req.query;
-    const recs = await listUsers({ role, q, limit });
-    res.json(recs.map(userAdminViewJSON));
+    const limit = Math.max(1, Math.min(Number(req.query.limit) || 50, 100));
+    const q = typeof req.query.q === "string" ? req.query.q.trim() : undefined;
+    const role = typeof req.query.role === "string" ? req.query.role.trim() : undefined;
+
+    const recs = await listUsers({ q, role, limit });
+    const items = recs.map(userAdminViewJSON);
+    res.json({ items, count: items.length });
   } catch (e) {
-    console.error("[admin:users:list]", e);
-    res.status(500).json({ error: "No se pudo listar usuarios" });
+    console.error("[users.admin:list]", e);
+    res.status(500).json({ error: "Error listando usuarios" });
   }
 });
 
-/**
- * GET /api/users/:id  (admin)
- */
-r.get("/:id", requireAdmin, async (req, res) => {
+r.delete("/:id", async (req, res) => {
   try {
-    const rec = await findUserById(req.params.id);
-    if (!rec) return res.status(404).json({ error: "Usuario no encontrado" });
-    res.json(userAdminViewJSON(rec));
-  } catch (e) {
-    console.error("[admin:users:get]", e);
-    res.status(404).json({ error: "Usuario no encontrado" });
-  }
-});
-
-/**
- * DELETE /api/users/:id  (admin)
- * Hard-delete. Si prefieres soft-delete, dime y lo cambiamos.
- */
-r.delete("/:id", requireAdmin, async (req, res) => {
-  try {
+    if (req.user?.id === req.params.id) {
+      return res.status(400).json({ error: "No puedes eliminar tu propia cuenta desde admin" });
+    }
     await deleteUser(req.params.id);
-    res.json({ ok: true });
+    res.status(204).end();
   } catch (e) {
-    console.error("[admin:users:delete]", e);
-    res.status(500).json({ error: "No se pudo eliminar el usuario" });
+    console.error("[users.admin:delete]", e);
+    res.status(500).json({ error: "Error eliminando usuario" });
   }
 });
 
