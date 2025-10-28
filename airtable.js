@@ -110,17 +110,33 @@ export function userAdminViewJSON(rec) {
 }
 
 export async function listUsers({ role, q, limit = 50 } = {}) {
-  const t = usersTable();
-  if (!t) throw new Error("Airtable no inicializado");
+  const table = usersTable();
+  if (!table) throw new Error("Airtable no inicializado");
+
   const parts = [];
   if (role) parts.push(`{Role} = '${role}'`);
   if (q) {
     const safe = String(q).replace(/'/g, "\\'");
-    parts.push(`OR(FIND(LOWER('${safe}'), LOWER({Name}))>0, FIND(LOWER('${safe}'), LOWER({Phone}))>0)`);
+    parts.push(
+      `OR(` +
+        `FIND(LOWER('${safe}'), LOWER({Name}))>0,` +
+        `FIND(LOWER('${safe}'), LOWER({Phone}))>0` +
+      `)`
+    );
   }
+
   const filterByFormula = parts.length ? `AND(${parts.join(",")})` : undefined;
-  return await t.select({ filterByFormula, pageSize: Math.min(Number(limit) || 50, 100) }).all();
+
+  const opts = {
+    pageSize: Math.min(Number(limit) || 50, 100),
+  };
+  // 👇 no enviar la propiedad si no hay filtro
+  if (filterByFormula) opts.filterByFormula = filterByFormula;
+
+  const records = await table.select(opts).all();
+  return records;
 }
+
 
 /* ==== Dishes ==== */
 export function dishesTable() {
@@ -154,18 +170,31 @@ export async function getDishById(id) {
 }
 
 export async function listDishes({ category, tag, available, q, limit = 50 } = {}) {
-  const t = dishesTable();
+  const table = dishesTable();
+  if (!table) throw new Error("Airtable no inicializado");
+
   const parts = [];
   if (category) parts.push(`{Category} = '${category}'`);
-  if (tag) parts.push(`FIND('${tag}', ARRAYJOIN({Tags}, ','))`);
-  if (available === "true") parts.push(`{Available} = 1`);
+  if (tag)      parts.push(`FIND('${tag}', ARRAYJOIN({Tags}, ','))`);
+  if (available === "true")  parts.push(`{Available} = 1`);
   if (available === "false") parts.push(`{Available} = 0`);
   if (q) {
     const safe = String(q).replace(/'/g, "\\'");
     parts.push(`OR(FIND(LOWER('${safe}'), LOWER({Name}))>0, FIND(LOWER('${safe}'), LOWER({Description}))>0)`);
   }
+
   const filterByFormula = parts.length ? `AND(${parts.join(",")})` : undefined;
-  return await t.select({ filterByFormula, pageSize: Math.min(Number(limit) || 50, 100) }).all();
+
+  const opts = {
+    pageSize: Math.min(Number(limit) || 50, 100),
+    // view: "Grid view",
+  };
+  // 👇 solo agregamos filterByFormula si existe
+  if (filterByFormula) opts.filterByFormula = filterByFormula;
+
+  const records = await table.select(opts).all();
+  return records;
 }
+
 
 export { normalizeRole };
