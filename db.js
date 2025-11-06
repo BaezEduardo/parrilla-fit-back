@@ -23,32 +23,53 @@ function mapUserRecord(r) {
     phone: f.Phone ?? null,
     passwordHash: f.PasswordHash ?? null,
     role: f.Role ?? "user",
+    // 👇 Preferencias (asume que en Airtable son campos de tipo multi-select o array)
+    likes: Array.isArray(f.Likes) ? f.Likes : [],
+    dislikes: Array.isArray(f.Dislikes) ? f.Dislikes : [],
+    allergies: Array.isArray(f.Allergies) ? f.Allergies : [],
   };
 }
 
 // ---- Users mappers (App -> Airtable)
-function toUserAirtableFields({ name, phone, passwordHash, role }) {
+function toUserAirtableFields({ name, phone, passwordHash, role, Likes, Dislikes, Allergies, likes, dislikes, allergies }) {
   const out = {};
   if (name !== undefined) out.Name = name;
   if (phone !== undefined) out.Phone = phone;
   if (passwordHash !== undefined) out.PasswordHash = passwordHash;
   if (role !== undefined) out.Role = role;
+
+  // 👇 Permite pasar con mayúscula o minúscula desde el código
+  if (Likes !== undefined) out.Likes = Likes;
+  if (Dislikes !== undefined) out.Dislikes = Dislikes;
+  if (Allergies !== undefined) out.Allergies = Allergies;
+  if (likes !== undefined) out.Likes = likes;
+  if (dislikes !== undefined) out.Dislikes = dislikes;
+  if (allergies !== undefined) out.Allergies = allergies;
+
   return out;
 }
 
+
 // ---- Dishes mappers (Airtable -> App)
 // Campos sugeridos en Airtable: Name, Description, Price, Calories, ImageUrl, Available, Category
+// ---- Dishes mappers (Airtable -> App)
+// Campos en Airtable: Name, Description, Price, Calories, Image (attachments), Available, Category
 function mapDishRecord(r) {
   const f = r?.fields || {};
+  const atts = Array.isArray(f.Image) ? f.Image : [];
+  const first = atts[0] || null;
+
+  const imageUrl = first?.thumbnails?.large?.url || first?.url || null;
+
   return {
     id: r.id,
     name: f.Name ?? null,
     description: f.Description ?? null,
     price: f.Price ?? null,
-    calories: f.Calories ?? null,
-    imageUrl: f.ImageUrl ?? null,
-    available: f.Available ?? false,
+    available: !!f.Available,
     category: f.Category ?? null,
+    image: atts,     // arreglo original (por si lo necesitas)
+    imageUrl,        // ← string listo para <img src=...>
   };
 }
 
@@ -58,10 +79,15 @@ function toDishAirtableFields(fields = {}) {
   if (fields.name !== undefined) out.Name = fields.name;
   if (fields.description !== undefined) out.Description = fields.description;
   if (fields.price !== undefined) out.Price = fields.price;
-  if (fields.calories !== undefined) out.Calories = fields.calories;
-  if (fields.imageUrl !== undefined) out.ImageUrl = fields.imageUrl;
   if (fields.available !== undefined) out.Available = fields.available;
   if (fields.category !== undefined) out.Category = fields.category;
+
+  // 👇 Soporta dos formas de setear imagen:
+  // a) arreglo de attachments completo
+  if (fields.image !== undefined) out.Image = fields.image;
+  // b) URL directa (Airtable acepta [{ url }])
+  if (fields.imageUrl) out.Image = [{ url: fields.imageUrl }];
+
   return out;
 }
 
@@ -108,7 +134,11 @@ export async function dbListUsers() {
 =========================== */
 
 export async function dbListDishes() {
-  const rs = await dishesTable().select().all();
+  const rs = await dishesTable()
+    .select({
+      fields: ["Name", "Description", "Price", "Available", "Category", "Image"], // 👈 incluye Image
+    })
+    .all();
   return rs.map(mapDishRecord);
 }
 
