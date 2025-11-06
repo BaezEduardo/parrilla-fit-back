@@ -5,7 +5,7 @@ import cookieParser from "cookie-parser";
 import morgan from "morgan";
 import cors from "cors";
 import { fileURLToPath } from "url";
-
+import aiRouter from "./routes/ai.js";
 import { ENV } from "./config/env.js";
 import authRouter from "./routes/auth.js";
 import usersRouter from "./routes/users.js";
@@ -21,6 +21,7 @@ const isProd = ENV.NODE_ENV === "production";
 // Si estás detrás de proxy (Plesk/Passenger) para que secure cookies funcionen correctamente
 app.set("trust proxy", 1);
 
+app.use("/api/ai", aiRouter);
 // --- Middlewares base
 app.use(morgan(isProd ? "combined" : "dev"));
 app.use(express.json());
