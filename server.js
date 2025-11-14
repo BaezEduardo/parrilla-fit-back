@@ -10,7 +10,7 @@ import { ENV } from "./config/env.js";
 import authRouter from "./routes/auth.js";
 import usersRouter from "./routes/users.js";
 import dishesRouter from "./routes/dishes.js";
-import { requireAuth } from "./middlewares/authz.js";
+import aiRouter from "./routes/ai.js";
 import { notFound, errorHandler } from "./middlewares/error.js";
 
 const app = express();
@@ -19,91 +19,61 @@ const __dirname = path.dirname(__filename);
 
 const isProd = ENV.NODE_ENV === "production";
 
-// --- Middlewares base
+// Detrás de proxy (Plesk/Passenger) para que cookies secure funcionen
+app.set("trust proxy", 1);
+
+// ---------------- Base middlewares ----------------
 app.use(morgan(isProd ? "combined" : "dev"));
 app.use(express.json());
 app.use(cookieParser());
 
-// --- CORS (dev permite localhost:5173; prod puedes fijar tu dominio)
-const corsOrigin = process.env.CORS_ORIGIN || "http://localhost:5173";
-app.use(
-  cors({
-    origin: isProd ? corsOrigin : corsOrigin,
-    credentials: true,
-  })
-);
+// CORS (dominios separados). ¡OJO!: sin "/" al final
+const corsOrigin = process.env.CORS_ORIGIN || "https://parrillafit.castelancarpinteyro.com";
+const corsCfg = {
+  origin: corsOrigin,
+  credentials: true,
+};
+app.use(cors(corsCfg));
+// Opcional: habilita preflight explícito
+app.options("*", cors(corsCfg));
 
-// --- Utilidad: opciones de cookie según entorno
+// Opciones de cookie coherentes con cross-site HTTPS
 function cookieOpts() {
-  const weekMs = 1000 * 60 * 60 * 24 * 7;
   return {
     httpOnly: true,
-    secure: isProd,            // requiere HTTPS en prod
-    sameSite: isProd ? "none" : "lax",
+    secure: true,      // HTTPS
+    sameSite: "none",  // cross-site
     path: "/",
-    maxAge: weekMs,            // alinea con JWT_EXPIRES ~7d
+    maxAge: 1000 * 60 * 60 * 24 * 7,
   };
 }
+// Si necesitas usarlas aquí en algún endpoint, están disponibles:
+app.locals.cookieOpts = cookieOpts;
 
-// --- “Login cookie wiring”
-// Interceptamos res.json para poner cookie si el body tiene { token, user }
-app.use((req, res, next) => {
-  const originalJson = res.json.bind(res);
-  res.json = (body) => {
-    try {
-      if (
-        req.path === "/api/auth/login" &&
-        req.method === "POST" &&
-        body &&
-        typeof body === "object" &&
-        body.token
-      ) {
-        res.cookie("token", body.token, cookieOpts());
-      }
-    } catch {
-      // no romper respuesta si algo falla al setear cookie
-    }
-    return originalJson(body);
-  };
-  next();
-});
+// ---------------- API routes ----------------
+app.get("/api/health", (_req, res) => res.json({ ok: true, env: ENV.NODE_ENV }));
 
-// --- API routes
-app.use("/api/auth", authRouter);
-app.use("/api/users", usersRouter);
+app.use("/api/auth", authRouter);     // /login, /register, /me, /logout (usar cookieOpts en auth.js)
+app.use("/api/users", usersRouter);   // protegido en router
 app.use("/api/dishes", dishesRouter);
+app.use("/api/ai", aiRouter);
 
-// --- Endpoints de sesión basados en cookie (sobrescriben los placeholders del router)
-app.get("/api/auth/me", requireAuth, (req, res) => {
-  // req.user viene del JWT (middlewares/authz.js)
-  const { id, role, name, phone } = req.user || {};
-  res.json({ id, role, name, phone });
-});
-
-app.post("/api/auth/logout", (req, res) => {
-  res.clearCookie("token", { ...cookieOpts(), maxAge: 0 });
-  res.status(204).end();
-});
-
-// --- Static (producción): sirve tu frontend si existe
-// Ajusta STATIC_DIR si tu build vive en otro sitio (por ejemplo, "../client/dist")
+// ---------------- Static (producción) ----------------
 const STATIC_DIR = process.env.STATIC_DIR || path.join(__dirname, "public");
 if (isProd) {
   app.use(express.static(STATIC_DIR));
-  // Para apps SPA: redirige todo lo no-API a index.html
+  // SPA: cualquier ruta NO-API envía index.html
   app.get("*", (req, res, next) => {
     if (req.path.startsWith("/api/")) return next();
     res.sendFile(path.join(STATIC_DIR, "index.html"));
   });
 }
 
-app.get("/api/health", (_req, res) => res.json({ ok: true, env: ENV.NODE_ENV }));
-
-// --- 404 y manejador de errores
+// ---------------- Errores ----------------
 app.use(notFound);
 app.use(errorHandler);
 
-// --- Inicio
+// ---------------- Start ----------------
 const port = ENV.PORT || 3000;
 app.listen(port, () => {
   console.log(`[server] ${isProd ? "PROD" : "DEV"} listening on :${port}`);
