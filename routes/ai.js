@@ -1,7 +1,6 @@
 // routes/ai.js
 import { Router } from "express";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
-import { requireAuth } from "../middlewares/authz.js"; // <- usaremos opcionalmente
 import OpenAI from "openai";
 import { ENV } from "../config/env.js";
 import { dbGetUserById } from "../db.js";
