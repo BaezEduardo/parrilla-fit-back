@@ -10,7 +10,7 @@ export const ENV = {
   AIRTABLE_BASE_ID: process.env.AIRTABLE_BASE_ID,
   T_USERS: process.env.AIRTABLE_TABLE_USERS ?? "Users",
   T_DISHES: process.env.AIRTABLE_TABLE_DISHES ?? "Platillos",
-
+  N8N_CHAT_URL: process.env.N8N_CHAT_URL,
   JWT_SECRET: process.env.JWT_SECRET ?? "dev-secret",
   JWT_EXPIRES: process.env.JWT_EXPIRES ?? "7d",
 };
